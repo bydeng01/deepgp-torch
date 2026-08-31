@@ -2,10 +2,11 @@
 
 [![PyPI](https://img.shields.io/pypi/v/deepgp-torch.svg)](https://pypi.org/project/deepgp-torch/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/bydeng01/deepgp-torch/blob/main/LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/bydeng01/deepgp-torch/ci.yml?branch=main&label=CI)](https://github.com/bydeng01/deepgp-torch/actions/workflows/ci.yml)
-[![Docker](https://img.shields.io/badge/Docker-supported-2496ED.svg?logo=docker&logoColor=white)](Dockerfile)
+[![Docker](https://img.shields.io/badge/Docker-supported-2496ED.svg?logo=docker&logoColor=white)](https://github.com/bydeng01/deepgp-torch/blob/main/Dockerfile)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![DOI](https://zenodo.org/badge/1324955093.svg)](https://doi.org/10.5281/zenodo.22188724)
 
 A GPyTorch library for doubly-stochastic deep Gaussian processes (Salimbeni &
 Deisenroth, 2017). It provides modular SVGP layers, a deep-GP container,

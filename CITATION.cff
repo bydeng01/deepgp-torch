@@ -14,6 +14,11 @@ authors:
 version: 0.1.1
 date-released: "2026-08-31"
 license: Apache-2.0
+doi: "10.5281/zenodo.22188725"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.22188724"
+    description: "Concept DOI — resolves to the latest version"
 repository-code: "https://github.com/bydeng01/deepgp-torch"
 keywords:
   - gaussian-processes
