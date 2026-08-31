@@ -18,4 +18,4 @@ Kept import-free so that ``setuptools`` can read ``__version__`` statically
 (via ``[tool.setuptools.dynamic]``) without importing the package at build time.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-08-31
+
+### Fixed
+
+- README links to `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`,
+  `CITATION.cff` and `LICENSE` are now absolute. As relative paths they resolved
+  against `pypi.org` rather than the repository, so all five were dead on the
+  PyPI project page.
+
 ## [0.1.0] - 2026-08-31
 
 Initial release: the core deep-GP stack plus the architecture builder.
@@ -50,4 +59,5 @@ Initial release: the core deep-GP stack plus the architecture builder.
   training; the GPflux golden-equivalence test, the UCI benchmark harness, and
   Sphinx docs.
 
+[0.1.1]: https://github.com/bydeng01/deepgp-torch/releases/tag/v0.1.1
 [0.1.0]: https://github.com/bydeng01/deepgp-torch/releases/tag/v0.1.0
