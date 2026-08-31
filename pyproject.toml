@@ -1,0 +1,123 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deepgp-torch"
+dynamic = ["version"]
+description = "A GPyTorch library for doubly-stochastic deep Gaussian processes."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "AUTHORS"]
+authors = [{ name = "Boyuan Deng", email = "boyuandeng01@gmail.com" }]
+keywords = [
+    "gaussian-processes",
+    "deep-gaussian-processes",
+    "gpytorch",
+    "pytorch",
+    "variational-inference",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.0",
+    "gpytorch>=1.15",
+    "linear_operator>=0.6.1",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Isolated benchmarking/golden-equivalence stack. The core library never imports
+# TensorFlow/GPflow/GPflux; these live only here.
+parity = [
+    "gpflow==2.9.2",
+    "gpflux==0.4.4",
+    "tensorflow==2.16.1",
+    "tf_keras==2.16.0",
+    "tensorflow-probability==0.24.0",
+]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "isort",
+    "flake8",
+    "mypy",
+    "pre-commit",
+    "build",
+    "twine",
+]
+
+[project.urls]
+Homepage = "https://github.com/bydeng01/deepgp-torch"
+Repository = "https://github.com/bydeng01/deepgp-torch"
+Issues = "https://github.com/bydeng01/deepgp-torch/issues"
+Changelog = "https://github.com/bydeng01/deepgp-torch/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+deepgp = ["data/*.npz", "py.typed"]
+
+[tool.setuptools.dynamic]
+version = { attr = "deepgp.version.__version__" }
+
+# --------------------------------------------------------------------------
+# Tooling
+# --------------------------------------------------------------------------
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311", "py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["deepgp"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_configs = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "src"
+# Lenient for now; tighten as the API settles.
+disallow_untyped_defs = false
+check_untyped_defs = false
+
+# numpy>=2 ships PEP 695 `type` statements in its stubs, which mypy rejects when
+# the target python_version is < 3.12. Skip analysing numpy's stubs (it is Any
+# anyway) so the type check is consistent across the 3.10-3.12 CI matrix.
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["deepgp"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]

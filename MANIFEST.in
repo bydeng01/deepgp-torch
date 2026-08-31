@@ -1,0 +1,4 @@
+# LICENSE, AUTHORS and README are included via project.license-files / readme.
+include CHANGELOG.md
+include CITATION.cff
+recursive-include tests *.py

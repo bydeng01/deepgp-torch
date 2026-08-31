@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using these metadata."
+title: "deepgp-torch: A GPyTorch library for doubly-stochastic deep Gaussian processes"
+abstract: >-
+  A reusable, application-agnostic GPyTorch library for doubly-stochastic deep
+  Gaussian processes (Salimbeni & Deisenroth, 2017): modular SVGP layers, a
+  configurable deep-GP builder, variational (ELBO) training, and calibrated
+  prediction.
+type: software
+authors:
+  - given-names: Boyuan
+    family-names: Deng
+    email: boyuandeng01@gmail.com
+version: 0.1.0
+date-released: "2026-08-31"
+license: Apache-2.0
+repository-code: "https://github.com/bydeng01/deepgp-torch"
+keywords:
+  - gaussian-processes
+  - deep-gaussian-processes
+  - gpytorch
+  - pytorch
+  - variational-inference
+references:
+  - type: article
+    title: "Doubly Stochastic Variational Inference for Deep Gaussian Processes"
+    authors:
+      - family-names: Salimbeni
+        given-names: Hugh
+      - family-names: Deisenroth
+        given-names: Marc Peter
+    year: 2017
+    collection-title: "Advances in Neural Information Processing Systems (NeurIPS)"
