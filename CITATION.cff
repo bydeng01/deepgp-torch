@@ -11,6 +11,8 @@ authors:
   - given-names: Boyuan
     family-names: Deng
     email: boyuandeng01@gmail.com
+  - given-names: Michael
+    family-names: Shields
 version: 0.1.1
 date-released: "2026-08-31"
 license: Apache-2.0
