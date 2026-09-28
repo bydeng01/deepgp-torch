@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-28
+
 ### Added
 
 - **Multi-output regression:** `SVGP`, `DeepGP` and `build_deep_gp` take
@@ -30,7 +32,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   With it, output `t` had variance `σ_t² + σ²` (`T + 1` parameters, of which
   the data identify only the `T` sums) and started at about 1.39 instead of the
   single-output 0.69. `likelihood.task_noises[t]` is now the noise variance of
-  output `t`.
+  output `t`. A multi-output `state_dict` saved with 0.1.1 no longer loads: it
+  has an extra `likelihood.raw_noise` entry. Single-output models are
+  unaffected.
 
 ### Fixed
 
@@ -97,6 +101,7 @@ Initial release: the core deep-GP stack plus the architecture builder.
   training; the GPflux golden-equivalence test, the UCI benchmark harness, and
   Sphinx docs.
 
-[Unreleased]: https://github.com/bydeng01/deepgp-torch/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/bydeng01/deepgp-torch/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/bydeng01/deepgp-torch/releases/tag/v0.2.0
 [0.1.1]: https://github.com/bydeng01/deepgp-torch/releases/tag/v0.1.1
 [0.1.0]: https://github.com/bydeng01/deepgp-torch/releases/tag/v0.1.0
