@@ -41,7 +41,7 @@ class DeepGPConfig:
         Multiplier (~1e-5) applied to hidden-layer ``q_sqrt`` (the Cholesky of
         ``q(u)``) for a stable, near-deterministic initialisation (required).
     likelihood_noise:
-        Initial observation-noise variance (required).
+        Initial observation-noise variance, used for every output (required).
     hidden_dims:
         Optional explicit hidden-layer widths; ``None`` (default) means
         dim-preserving hidden layers (width = input dim).

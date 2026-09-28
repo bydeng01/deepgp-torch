@@ -27,6 +27,11 @@ automatically and the whole thing is wrapped in a
 :class:`~gpytorch.mlls.DeepApproximateMLL`, which averages the objective over the
 doubly-stochastic samples.  For a shallow model (e.g. ``SVGP``) a plain
 :class:`~gpytorch.mlls.VariationalELBO` is returned.
+
+With ``T`` outputs the expected log-likelihood sums over outputs and the KL
+covers every output GP.  ``num_data`` stays ``N``, the number of rows of ``X``:
+GPyTorch divides the likelihood term by the number of rows too, so passing
+``N * T`` would under-weight the KL by a factor of ``T``.
 """
 
 from __future__ import annotations

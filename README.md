@@ -17,9 +17,9 @@ The importable package is `deepgp`. Its API and engineering are modelled on
 PyTorch + GPyTorch + linear_operator.
 
 > **Status:** early development. `SVGP`, `DeepGP` and `build_deep_gp` train and
-> predict on `snelson1d`. Multi-output support, minibatch and natural-gradient
-> training, and the benchmark harness are not implemented yet (see
-> [Roadmap](#roadmap)).
+> predict on `snelson1d`, with one output or several. Minibatch and
+> natural-gradient training and the benchmark harness are not implemented yet
+> (see [Roadmap](#roadmap)).
 
 ## Install
 
@@ -79,6 +79,36 @@ fit(model, data.X_train, data.Y_train, epochs=300, lr=0.01)
 mean, var = predict(model, data.X_test)
 ```
 
+### Multiple outputs
+
+`DeepGP`, `SVGP` and `build_deep_gp` take `num_outputs=T` and train on targets
+of shape `(N, T)`:
+
+```python
+import torch
+
+X = torch.linspace(-2, 2, 200).unsqueeze(-1)                 # (200, 1)
+F = torch.cat([torch.sin(2 * X), torch.cos(2 * X)], dim=-1)  # (200, 2)
+Y = F + torch.tensor([0.05, 0.3]) * torch.randn_like(F)      # noise std 0.05 and 0.3
+
+model = DeepGP([1, 2], num_inducing=32, num_outputs=2)       # hidden width 2, 2 outputs
+fit(model, X, Y, epochs=300, lr=0.01)
+mean, var = predict(model, X)                                # each (200, 2)
+print(model.likelihood.task_noises)                          # one noise variance per output
+```
+
+The output layer is `T` independent GPs, each with its own inducing points,
+`q(u)`, mean and kernel hyper-parameters, and the likelihood has one noise
+variance per output. In a `DeepGP` all outputs share the hidden layers and are
+functions of the last hidden layer's output, so a width-1 hidden layer sends
+every output through a single scalar. An `SVGP` shares nothing: its ELBO is the
+sum of the `T` single-output ELBOs.
+
+`predict` returns each output's marginal mean and variance. Under a deep GP's
+predictive mixture the outputs are in general dependent, because within each
+mixture component all `T` means are computed from the same hidden-layer sample;
+that cross-output covariance is not returned.
+
 ## Why a deep-GP-specific library over raw GPyTorch?
 
 It encodes the non-obvious correctness details that raw GPyTorch leaves to you:
@@ -94,6 +124,15 @@ It encodes the non-obvious correctness details that raw GPyTorch leaves to you:
   `var = out.variance.mean(0) + out.mean.var(0, unbiased=False)`. A single
   component's `.variance` under-reports uncertainty.
 - **First-class KL tempering** — the ELBO KL weight is exactly `beta / num_data`.
+- **One noise variance per output** — by default GPyTorch's
+  `MultitaskGaussianLikelihood` adds a shared noise term to each task's own,
+  so output `t` has variance `σ_t² + σ²`: `T + 1` parameters, of which the data
+  identify only the `T` sums. Multi-output models here drop the shared term, so
+  `likelihood.task_noises[t]` is the noise variance of output `t`.
+- **Targets must match the output shape** — `fit` raises if `Y.shape` differs
+  from the model's output event shape. Otherwise a `(N,)` target broadcasts
+  against `(N, T)` outputs whenever `N == T`, and training runs on the wrong
+  objective without an error.
 
 ## Development
 
@@ -128,11 +167,13 @@ Implemented:
 - **Architecture builder:** `DeepGPConfig` and `build_deep_gp` with stable-start
   init, `kernels/factory` + `means/factory` (identity/PCA `LinearMean`), and
   `data/inducing` (KMeans / subset / explicit `z_init`).
+- **Multi-output regression:** `num_outputs` on `SVGP`, `DeepGP` and
+  `build_deep_gp` (independent output GPs, shared hidden layers) and
+  `likelihoods/factory` (one noise variance per output).
 
 Not yet implemented — the modules exist as placeholders:
 
-- Multi-output support (`MultitaskGaussianLikelihood`, `batch_shape` threading)
-  and `likelihoods` / `variational` convenience helpers.
+- `variational` convenience helpers.
 - Minibatch/`DataLoader` training with LR schedulers, checkpointing and logging,
   and natural-gradient training.
 - Golden equivalence test against GPflux, a UCI benchmark harness, and Sphinx

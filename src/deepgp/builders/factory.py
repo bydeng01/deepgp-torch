@@ -22,8 +22,9 @@ deep GP and applies the builder's stable-start initialisation:
   identity-mean hidden layers keep the representation ~ ``X``);
 * hidden-layer **identity** (or PCA) linear mean functions;
 * hidden-layer ``q_sqrt`` **shrunk** by ``config.inner_layer_qsqrt_factor`` (~1e-5);
-* a ``ConstantMean`` output layer (single regression output);
-* a ``GaussianLikelihood`` initialised to ``config.likelihood_noise``.
+* a ``ConstantMean`` output layer with one GP per output (``num_outputs``);
+* a Gaussian likelihood whose noise variance (for every output) starts at
+  ``config.likelihood_noise``.
 """
 
 from __future__ import annotations
@@ -31,12 +32,12 @@ from __future__ import annotations
 from typing import Optional
 
 import torch
-from gpytorch.likelihoods import GaussianLikelihood
 
 from deepgp.builders.config import DeepGPConfig
 from deepgp.data.inducing import init_inducing
 from deepgp.kernels.factory import make_kernel
 from deepgp.layers.gp_layer import DeepGPHiddenLayer
+from deepgp.likelihoods.factory import make_likelihood
 from deepgp.means.factory import make_mean
 from deepgp.models.deep_gp import DeepGP
 from deepgp.utils.dtype import as_default_dtype
@@ -94,6 +95,7 @@ def build_deep_gp(
     num_layers: int = 2,
     config: Optional[DeepGPConfig] = None,
     seed: int = 0,
+    num_outputs: Optional[int] = None,
 ) -> DeepGP:
     """Build a stacked deep GP with the stable-start initialisation.
 
@@ -109,11 +111,15 @@ def build_deep_gp(
         A :class:`DeepGPConfig` (required).
     seed:
         Seed for the inducing initialisation.
+    num_outputs:
+        Number of regression outputs ``T``; ``None`` (default) for one.  Each
+        output GP starts from its own copy of the KMeans inducing points.
 
     Returns
     -------
     DeepGP
-        A single-output deep GP ready for :func:`deepgp.fit` / :func:`deepgp.predict`.
+        A deep GP with ``num_outputs`` outputs, ready for :func:`deepgp.fit` /
+        :func:`deepgp.predict`.
     """
     if config is None:
         raise ValueError("build_deep_gp requires a DeepGPConfig (config=...).")
@@ -150,16 +156,17 @@ def build_deep_gp(
 
     last_layer = DeepGPHiddenLayer(
         input_dims=prev,
-        output_dims=None,
+        output_dims=num_outputs,
         num_inducing=num_inducing,
-        inducing_points=z.clone(),
-        mean_function=make_mean(prev, None, kind="constant"),
-        covar_module=make_kernel(prev, None),
+        inducing_points=(
+            z.clone()
+            if num_outputs is None
+            else z.unsqueeze(0).repeat(num_outputs, 1, 1)  # (T, M, D)
+        ),
+        mean_function=make_mean(prev, num_outputs, kind="constant"),
+        covar_module=make_kernel(prev, num_outputs),
         whiten=config.whiten,
     )
 
-    likelihood = GaussianLikelihood()
-    with torch.no_grad():
-        likelihood.noise = torch.as_tensor(float(config.likelihood_noise))
-
+    likelihood = make_likelihood(num_outputs, noise=config.likelihood_noise)
     return DeepGP.from_layers(hidden_layers, last_layer, likelihood=likelihood)

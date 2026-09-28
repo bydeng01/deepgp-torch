@@ -58,7 +58,10 @@ def fit(
         Training inputs, shape ``(N, input_dims)``.
     Y:
         Training targets, shape ``(N,)`` (single output) or ``(N, T)``
-        (multi-output).
+        (multi-output).  Must equal the event shape of ``model(X)``; anything
+        else raises ``ValueError`` instead of broadcasting against the output
+        (a ``(N,)`` target and ``(N, T)`` outputs broadcast silently when
+        ``N == T``).
     epochs:
         Number of full-batch optimisation steps.
     lr:
@@ -93,6 +96,12 @@ def fit(
         with gpytorch.settings.num_likelihood_samples(num_samples):
             optimizer.zero_grad()
             output = model(X)
+            if output.event_shape != Y.shape:
+                raise ValueError(
+                    f"Y has shape {tuple(Y.shape)} but model(X) has event shape "
+                    f"{tuple(output.event_shape)}; targets must be (N,) for a "
+                    "single-output model and (N, num_outputs) otherwise."
+                )
             loss = -mll(output, Y)
             loss.backward()
             optimizer.step()

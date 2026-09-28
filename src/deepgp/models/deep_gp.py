@@ -23,6 +23,11 @@ Layers must be stored so that ``model.modules()`` can find them; the hidden
 layers therefore live in a :class:`torch.nn.ModuleList` (a plain Python list
 would hide them from module discovery, and their KL contributions would be
 silently dropped).
+
+With ``num_outputs=T`` the output layer is ``T`` independent GPs on top of
+hidden layers that all outputs share.  Given a sample of the hidden layers the
+outputs are independent; integrating the hidden layers out makes them
+dependent in general.
 """
 
 from __future__ import annotations
@@ -30,14 +35,11 @@ from __future__ import annotations
 from typing import Iterable, Optional, Sequence
 
 import torch
-from gpytorch.likelihoods import (
-    GaussianLikelihood,
-    Likelihood,
-    MultitaskGaussianLikelihood,
-)
+from gpytorch.likelihoods import Likelihood
 from gpytorch.models.deep_gps import DeepGP as _DeepGP
 
 from deepgp.layers.gp_layer import DeepGPHiddenLayer
+from deepgp.likelihoods.factory import make_likelihood
 
 __all__ = ["DeepGP"]
 
@@ -57,10 +59,13 @@ class DeepGP(_DeepGP):
     num_inducing:
         Number of inducing points per layer.
     num_outputs:
-        Number of regression outputs.  ``None`` (default) means a single output
-        with a :class:`~gpytorch.likelihoods.GaussianLikelihood`; an integer
+        Number of regression outputs ``T``.  ``None`` (default) means a single
+        output with a :class:`~gpytorch.likelihoods.GaussianLikelihood`.  An
+        integer makes the output layer ``T`` independent GPs, each with its own
+        inducing points, ``q(u)``, mean and kernel hyper-parameters, and
         attaches a :class:`~gpytorch.likelihoods.MultitaskGaussianLikelihood`
-        (independent per-task noise, ``rank=0``).
+        with one noise variance per output (see
+        :func:`deepgp.likelihoods.make_likelihood`).
     hidden_mean_type:
         Mean function for hidden layers (default ``'linear'``).
     output_mean_type:
@@ -101,11 +106,7 @@ class DeepGP(_DeepGP):
         )
 
         self.num_outputs = num_outputs
-        self.likelihood = (
-            GaussianLikelihood()
-            if num_outputs is None
-            else MultitaskGaussianLikelihood(num_tasks=num_outputs)
-        )
+        self.likelihood = make_likelihood(num_outputs)
 
     @classmethod
     def from_layers(
@@ -121,18 +122,24 @@ class DeepGP(_DeepGP):
         with the stable-start initialisation (KMeans inducing, identity/PCA
         means, shrunk hidden ``q_sqrt``). The hidden layers are stored in a
         :class:`torch.nn.ModuleList` so the variational strategy discovers them.
+
+        The number of outputs is ``last_layer.output_dims``; ``num_outputs``
+        need not be given, and a value that disagrees raises ``ValueError``.
         """
+        if num_outputs is None:
+            num_outputs = last_layer.output_dims
+        elif num_outputs != last_layer.output_dims:
+            raise ValueError(
+                f"num_outputs={num_outputs} does not match "
+                f"last_layer.output_dims={last_layer.output_dims}."
+            )
         self = cls.__new__(cls)
         _DeepGP.__init__(self)
         self.hidden_layers = torch.nn.ModuleList(list(hidden_layers))
         self.last_layer = last_layer
         self.num_outputs = num_outputs
         if likelihood is None:
-            likelihood = (
-                GaussianLikelihood()
-                if num_outputs is None
-                else MultitaskGaussianLikelihood(num_tasks=num_outputs)
-            )
+            likelihood = make_likelihood(num_outputs)
         self.likelihood = likelihood
         return self
 

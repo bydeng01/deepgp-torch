@@ -39,7 +39,8 @@ Defaults:
 
 ``batch_shape`` threads ``output_dims`` through every sub-module so that each of
 the ``output_dims`` latent GPs gets its own hyper-parameters.  ``output_dims is
-None`` denotes a single-output layer (the output layer of a regression DGP).
+None`` denotes a single-output layer (the output layer of a single-output DGP;
+a multi-output DGP's output layer has ``output_dims = num_outputs``).
 """
 
 from __future__ import annotations
@@ -90,7 +91,7 @@ class DeepGPHiddenLayer(DeepGPLayer):
         Dimensionality of the layer input.
     output_dims:
         Number of latent GP outputs.  ``None`` means a single output (no batch
-        dimension), used for the final regression layer.
+        dimension), used for the output layer of a single-output model.
     num_inducing:
         Number of inducing points ``M``.
     mean_type:

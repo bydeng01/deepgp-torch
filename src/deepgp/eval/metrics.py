@@ -17,6 +17,9 @@
 * :func:`rmse` — root-mean-square error of a point prediction.
 * :func:`gaussian_nll` — mean negative log-likelihood of the targets under a
   diagonal-Gaussian predictive distribution ``N(mean, variance)``.
+
+For multi-output ``(N, T)`` tensors both average over all ``N * T`` entries;
+pass one column (``mean[:, t]``) for a per-output score.
 """
 
 from __future__ import annotations

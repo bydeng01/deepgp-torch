@@ -28,6 +28,14 @@ under-reports uncertainty.
 
 For a shallow model (``SVGP``) there is no sample dimension, so the model's own
 predictive mean/variance are returned directly.
+
+With ``T`` outputs the reduction is applied to each output, giving ``(N, T)``
+tensors: ``var[n, t]`` is the variance of output ``t`` at ``x_n`` under the
+mixture.  Within a component the outputs are independent, but all ``T``
+component means are functions of the same hidden-layer sample, so across
+components they can co-vary.  The mixture covariance between outputs ``t != t'``
+at ``x_n`` is ``Cov_s[m_{s,n,t}, m_{s,n,t'}]``, which ``predict`` does not
+return.  For an ``SVGP`` the outputs are independent and it is zero.
 """
 
 from __future__ import annotations

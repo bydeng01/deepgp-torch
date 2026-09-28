@@ -21,9 +21,16 @@ building block the deep GP generalises.  It is a stochastic variational GP
 :class:`~gpytorch.variational.VariationalStrategy` over a
 :class:`~gpytorch.variational.CholeskyVariationalDistribution`.
 
-A :class:`~gpytorch.likelihoods.GaussianLikelihood` is attached as
-``self.likelihood`` so that the same :func:`deepgp.fit` / :func:`deepgp.predict`
-helpers work for both ``SVGP`` and :class:`deepgp.models.deep_gp.DeepGP`.
+A Gaussian likelihood is attached as ``self.likelihood`` so that the same
+:func:`deepgp.fit` / :func:`deepgp.predict` helpers work for both ``SVGP`` and
+:class:`deepgp.models.deep_gp.DeepGP`.
+
+With ``num_outputs=T`` the model is ``T`` independent GPs.  The inducing
+points, ``q(u)``, mean and kernel are batched over ``batch_shape=[T]``, an
+:class:`~gpytorch.variational.IndependentMultitaskVariationalStrategy` turns
+the batch into a multitask output, and the likelihood has one noise variance
+per output.  No parameter is shared between outputs, so the ELBO is the sum of
+the ``T`` single-output ELBOs.
 """
 
 from __future__ import annotations
@@ -33,14 +40,15 @@ from typing import Optional
 import torch
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.kernels import RBFKernel, ScaleKernel
-from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.means import ConstantMean
 from gpytorch.models import ApproximateGP
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
+    IndependentMultitaskVariationalStrategy,
     VariationalStrategy,
 )
 
+from deepgp.likelihoods.factory import make_likelihood
 from deepgp.utils.dtype import as_default_dtype
 
 __all__ = ["SVGP"]
@@ -55,11 +63,17 @@ class SVGP(ApproximateGP):
         Initial inducing inputs of shape ``(num_inducing, input_dims)``.  Cast
         to the current default dtype (``float64``), device preserved, so a
         lower-precision tensor cannot leave the model in mixed precision.
+        With ``num_outputs=T`` each output GP starts from its own copy.
     input_dims:
         Input dimensionality; used for ARD.  Inferred from ``inducing_points``
         when ``None``.
     learn_inducing_locations:
         Whether to optimise the inducing locations (default ``True``).
+    num_outputs:
+        Number of regression outputs ``T``.  ``None`` (default) means a single
+        output with a :class:`~gpytorch.likelihoods.GaussianLikelihood`; an
+        integer gives ``T`` independent GPs with one noise variance each (see
+        :func:`deepgp.likelihoods.make_likelihood`).
     """
 
     def __init__(
@@ -67,6 +81,7 @@ class SVGP(ApproximateGP):
         inducing_points: torch.Tensor,
         input_dims: Optional[int] = None,
         learn_inducing_locations: bool = True,
+        num_outputs: Optional[int] = None,
     ) -> None:
         if inducing_points.dim() != 2:
             raise ValueError(
@@ -81,18 +96,37 @@ class SVGP(ApproximateGP):
         if input_dims is None:
             input_dims = inducing_points.size(-1)
 
-        variational_distribution = CholeskyVariationalDistribution(num_inducing)
-        variational_strategy = VariationalStrategy(
+        batch_shape = (
+            torch.Size([]) if num_outputs is None else torch.Size([num_outputs])
+        )
+        if num_outputs is not None:
+            inducing_points = inducing_points.unsqueeze(0).repeat(num_outputs, 1, 1)
+
+        variational_distribution = CholeskyVariationalDistribution(
+            num_inducing, batch_shape=batch_shape
+        )
+        base_strategy = VariationalStrategy(
             self,
             inducing_points,
             variational_distribution,
             learn_inducing_locations=learn_inducing_locations,
         )
+        variational_strategy = (
+            base_strategy
+            if num_outputs is None
+            else IndependentMultitaskVariationalStrategy(
+                base_strategy, num_tasks=num_outputs
+            )
+        )
         super().__init__(variational_strategy)
 
-        self.mean_module = ConstantMean()
-        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=input_dims))
-        self.likelihood = GaussianLikelihood()
+        self.num_outputs = num_outputs
+        self.mean_module = ConstantMean(batch_shape=batch_shape)
+        self.covar_module = ScaleKernel(
+            RBFKernel(batch_shape=batch_shape, ard_num_dims=input_dims),
+            batch_shape=batch_shape,
+        )
+        self.likelihood = make_likelihood(num_outputs)
 
     def forward(self, x: torch.Tensor) -> MultivariateNormal:
         mean_x = self.mean_module(x)

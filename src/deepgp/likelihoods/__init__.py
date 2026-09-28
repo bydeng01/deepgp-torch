@@ -12,14 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Likelihood helpers.
+"""Likelihood factories."""
 
-Placeholder for convenience constructors with noise initialisation. Likelihoods
-are currently attached directly in :class:`deepgp.models.deep_gp.DeepGP` /
-:class:`deepgp.models.svgp.SVGP`, and :func:`deepgp.builders.build_deep_gp`
-constructs its ``GaussianLikelihood`` inline.
-"""
+from deepgp.likelihoods.factory import make_likelihood
 
-from __future__ import annotations
-
-__all__: list[str] = []
+__all__ = ["make_likelihood"]
