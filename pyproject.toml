@@ -44,6 +44,9 @@ parity = [
     "tf_keras==2.16.0",
     "tensorflow-probability==0.24.0",
 ]
+docs = [
+    "matplotlib>=3.8",
+]
 dev = [
     "pytest",
     "pytest-cov",

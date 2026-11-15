@@ -21,6 +21,16 @@ package is imported as `deepgp`. Its API follows
 [GPflux](https://github.com/secondmind-labs/GPflux), and it is built on PyTorch,
 GPyTorch and linear_operator.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/bydeng01/deepgp-torch/main/docs/images/snelson1d_dark.png">
+  <img alt="Predictive mean and two-standard-deviation band of ExactGP, SVGP and DeepGP on the snelson1d dataset" src="https://raw.githubusercontent.com/bydeng01/deepgp-torch/main/docs/images/snelson1d_light.png">
+</picture>
+
+Predictions on the `snelson1d` dataset. Lines show the predictive mean and
+bands show ±2 standard deviations of `y`. The script
+[`docs/images/make_snelson1d.py`](https://github.com/bydeng01/deepgp-torch/blob/main/docs/images/make_snelson1d.py)
+generates the figure.
+
 > **Status:** early development. Minibatch training, natural-gradient training
 > and the benchmark harness are not implemented yet (see
 > [planned work](https://github.com/bydeng01/deepgp-torch/blob/main/CONTRIBUTING.md#planned-work)).
