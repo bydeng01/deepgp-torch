@@ -43,6 +43,31 @@ pre-commit install      # run black/isort/flake8/mypy on every commit
   used only by benchmarks and golden-equivalence tests. Keep the library
   application-agnostic.
 
+## Docker
+
+The Dockerfile builds a CPU-only image. CI also builds and runs this image.
+
+```bash
+docker build -t deepgp-torch .
+docker run --rm deepgp-torch                # prints the installed version
+docker run --rm deepgp-torch pytest -q      # runs the test suite
+docker run --rm -it deepgp-torch python     # interactive REPL
+```
+
+## Planned work
+
+These features are not implemented yet. The table lists where each one belongs.
+Open an issue before starting work on one of them.
+
+| Feature | Location |
+|---|---|
+| Minibatch training with `DataLoader`, learning-rate schedulers and logging | `deepgp.training.trainer` |
+| Saving and loading model state, build config and RNG state | `deepgp.training.checkpoint` |
+| Natural-gradient training, with NGD on `q(u)` and Adam on hyperparameters | `deepgp.training.natgrad` |
+| Re-exports of GPyTorch variational objects | `deepgp.variational` |
+| UCI benchmark harness and equivalence test against GPflux | `benchmarks/` |
+| Sphinx documentation | `docs/` |
+
 ## Reporting bugs / requesting features
 
 Open an issue using the templates under

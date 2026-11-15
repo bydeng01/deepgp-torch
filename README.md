@@ -22,18 +22,13 @@ package is imported as `deepgp`. Its API follows
 GPyTorch and linear_operator.
 
 > **Status:** early development. Minibatch training, natural-gradient training
-> and the benchmark harness are not implemented yet (see [Roadmap](#roadmap)).
+> and the benchmark harness are not implemented yet (see
+> [planned work](https://github.com/bydeng01/deepgp-torch/blob/main/CONTRIBUTING.md#planned-work)).
 
 ## Install
 
 ```bash
 pip install deepgp-torch
-```
-
-For development, install from a checkout:
-
-```bash
-pip install -e ".[dev]"
 ```
 
 Requires Python ≥ 3.10, `torch>=2.0`, `gpytorch>=1.15`,
@@ -78,27 +73,12 @@ for name, model in models.items():
 returns the predictive mean and variance of `y`. With `add_noise=False` it
 returns the mean and variance of the latent function `f`.
 
-An `ExactGP` stores its training data. `fit` replaces it with the `X` and `Y`
-passed to `fit`.
-
-For a `DeepGP`, `num_samples` in `fit` and `k` in `predict` set S. Their
-defaults are 10 and 50.
-
 ### Deep GP builder
 
 `build_deep_gp` builds a deep GP whose hidden layers have the same width as the
-input, like `build_constant_input_dim_deep_gp` in GPflux. Here `q(u)` denotes
-the variational distribution of a layer's inducing variables `u`. The builder
-initialises the model from the training inputs:
-
-- inducing points at the k-means centroids of `X`,
-- identity mean functions in the hidden layers,
-- the Cholesky factor of each hidden layer's `q(u)` covariance multiplied by
-  `inner_layer_qsqrt_factor`,
-- the observation noise variance set to `likelihood_noise`.
-
-A small `inner_layer_qsqrt_factor`, such as `1e-5`, reduces the sampling noise
-of the hidden layers at the start of training.
+input, like `build_constant_input_dim_deep_gp` in GPflux. It initialises the
+inducing points, hidden-layer means and variational distributions from the
+training inputs.
 
 ```python
 from deepgp import DeepGPConfig, build_deep_gp
@@ -127,98 +107,22 @@ mean, var = predict(model, X)                                # each (200, 2)
 print(model.likelihood.task_noises)                          # one noise variance per output
 ```
 
-The `T` outputs are modelled by `T` independent GPs, which form the output
-layer of a `DeepGP`. Each GP has its own mean and kernel hyperparameters. In
-`SVGP` and `DeepGP`, each GP also has its own inducing points and `q(u)`. The
-likelihood has one noise variance per output.
+Each output has its own GP and noise variance. In a `DeepGP` the outputs share
+the hidden layers.
 
-`ExactGP` and `SVGP` share no parameters between outputs. Their log marginal
-likelihood and ELBO are sums of `T` single-output terms.
+## Documentation
 
-In a `DeepGP` all outputs share the hidden layers. Each output GP takes the
-output of the last hidden layer as its input. A hidden layer of width 1
-therefore passes every output through one scalar feature.
-
-`predict` returns the marginal mean and variance of each output. Under a
-`DeepGP` the outputs are dependent. Within each mixture component, all `T`
-means are computed from the same hidden-layer sample. `predict` does not return
-the covariance between outputs.
-
-## Implementation notes
-
-- **Layers.** `DeepGPHiddenLayer` holds the inducing points, `q(u)`, mean and
-  kernel of one layer. GPyTorch's `DeepGP` base class finds the layers through
-  `model.modules()` and sums their KL divergences.
-- **Hidden-layer means.** Compositions of zero-mean GPs lose degrees of freedom
-  as depth increases (Duvenaud et al., 2014). Hidden layers therefore use linear
-  mean functions, as in Salimbeni & Deisenroth (2017). Each hidden layer is then
-  a GP perturbation of a linear map of its input.
-- **Training objective.** For `SVGP` and `DeepGP`, `fit` maximises the ELBO
-  divided by N,
-  `(1/N) Σ_n E_q[log p(y_n | f_n)] − (β/N) KL[q(u) ‖ p(u)]`.
-  The `beta` argument of `fit` sets β and defaults to 1. For `ExactGP`, `fit`
-  maximises the log marginal likelihood divided by the number of targets.
-- **Deep GP prediction.** The predictive distribution of a `DeepGP` is a mixture
-  of S Gaussians with means `m_s` and variances `v_s`. By the law of total
-  variance, `predict` returns the mean `E_s[m_s]` and the variance
-  `E_s[v_s] + Var_s[m_s]`. The variance of a single component omits
-  `Var_s[m_s]` and underestimates the predictive variance.
-- **Output noise.** By default, GPyTorch's `MultitaskGaussianLikelihood` adds a
-  shared noise variance σ² to the noise variance σ_t² of each output. The data
-  identify only the `T` sums σ_t² + σ², not all `T + 1` parameters. The
-  multi-output likelihood here omits σ², so `likelihood.task_noises[t]` is σ_t².
-- **Target shape.** `fit` raises `ValueError` when `Y.shape` differs from the
-  event shape of `model(X)`. Without this check, an `(N,)` target broadcasts
-  against `(N, T)` outputs when N = T, and `fit` optimises the wrong objective.
-
-## Development
-
-```bash
-make install      # pip install -e ".[dev]"
-make format       # black + isort
-make check        # black --check, isort --check-only, flake8, mypy src
-make test         # pytest
-```
-
-CI (`.github/workflows/ci.yml`) runs the format, lint, type and test checks on
-Python 3.10, 3.11 and 3.12. It also builds and runs the Docker image.
-
-### Docker
-
-The Dockerfile builds a CPU-only image:
-
-```bash
-docker build -t deepgp-torch .
-docker run --rm deepgp-torch                # prints the installed version
-docker run --rm deepgp-torch pytest -q      # runs the test suite
-docker run --rm -it deepgp-torch python     # interactive REPL
-```
-
-## Roadmap
-
-Implemented:
-
-- **Models:** `ExactGP`, `SVGP` and `DeepGP`, trained with `fit` and evaluated
-  with `predict`.
-- **Deep GP builder:** `DeepGPConfig` and `build_deep_gp`, with k-means or
-  subset inducing initialisation and identity or PCA hidden means.
-- **Multi-output regression:** `num_outputs` on all three models and on
-  `build_deep_gp`.
-- **Utilities:** the `snelson1d` dataset, evaluation metrics, seeding and dtype
-  helpers.
-
-Planned (the modules exist as placeholders):
-
-- `variational` helpers.
-- Minibatch training with `DataLoader`, learning-rate schedulers, checkpointing
-  and logging.
-- Natural-gradient training.
-- An equivalence test against GPflux, a UCI benchmark harness and Sphinx docs.
+- [User guide](https://github.com/bydeng01/deepgp-torch/blob/main/docs/user_guide.md):
+  training objectives, deep GP prediction, builder initialisation and multiple
+  outputs.
+- API reference: the docstrings, for example `help(deepgp.fit)`.
+- [Changelog](https://github.com/bydeng01/deepgp-torch/blob/main/CHANGELOG.md).
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/bydeng01/deepgp-torch/blob/main/CONTRIBUTING.md)
-for the development setup and workflow. Participants follow the
+[CONTRIBUTING.md](https://github.com/bydeng01/deepgp-torch/blob/main/CONTRIBUTING.md)
+covers the development setup, the checks CI runs, the Docker image and planned
+work. Participants follow the
 [Code of Conduct](https://github.com/bydeng01/deepgp-torch/blob/main/CODE_OF_CONDUCT.md).
 Report security issues as described in
 [SECURITY.md](https://github.com/bydeng01/deepgp-torch/blob/main/SECURITY.md).
@@ -231,8 +135,6 @@ GitHub shows this file as a "Cite this repository" button.
 
 ## References
 
-- Duvenaud, Rippel, Adams & Ghahramani, *Avoiding Pathologies in Very Deep
-  Networks*, AISTATS 2014.
 - Hensman, Fusi & Lawrence, *Gaussian Processes for Big Data*, UAI 2013.
 - Rasmussen & Williams, *Gaussian Processes for Machine Learning*, MIT Press,
   2006.
