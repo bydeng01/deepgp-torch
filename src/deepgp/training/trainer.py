@@ -17,7 +17,9 @@
 Implements :func:`fit`, a hand-written optimisation loop (GPyTorch has no
 ``model.fit``).  Both the training and evaluation forward passes are wrapped in
 ``gpytorch.settings.num_likelihood_samples(S)`` so the doubly-stochastic Monte
-Carlo estimate of the ELBO uses ``S`` samples.
+Carlo estimate of the ELBO uses ``S`` samples.  With ``natgrad_lr`` the
+natural-parameter ``q(u)`` are stepped by natural gradients and everything else
+by Adam (see :mod:`deepgp.training.natgrad`).
 
 Minibatch / ``DataLoader`` training and LR schedulers are not implemented yet.
 """
@@ -30,6 +32,7 @@ import gpytorch
 import torch
 
 from deepgp.training.elbo import is_exact_gp, make_mll
+from deepgp.training.natgrad import make_optimizers
 from deepgp.utils.dtype import as_default_dtype
 
 __all__ = ["fit"]
@@ -45,6 +48,7 @@ def fit(
     beta: float = 1.0,
     optimizer: Optional[torch.optim.Optimizer] = None,
     verbose: bool = False,
+    natgrad_lr: Optional[float] = None,
 ) -> List[float]:
     """Train ``model`` on ``(X, Y)`` by maximising the ELBO.
 
@@ -73,9 +77,15 @@ def fit(
         KL tempering coefficient (KL weight ``= beta / N``).
     optimizer:
         Optional pre-constructed optimiser.  Defaults to
-        ``torch.optim.Adam(model.parameters(), lr=lr)``.
+        ``torch.optim.Adam(model.parameters(), lr=lr)``; with ``natgrad_lr``,
+        Adam over every parameter except the natural ``q(u)``, which a given
+        ``optimizer`` must not hold either.
     verbose:
         If ``True``, print the loss every ~10% of training.
+    natgrad_lr:
+        Natural-gradient step size for every ``q(u)`` built with
+        ``variational='natural'`` (required for such a model, and rejected for
+        any other).  ``None`` (default) trains everything with ``optimizer``.
 
     Returns
     -------
@@ -89,8 +99,9 @@ def fit(
         model.set_train_data(X, Y, strict=False)
 
     model.train()
-    if optimizer is None:
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizers = make_optimizers(
+        model, num_data=X.size(0), lr=lr, natgrad_lr=natgrad_lr, optimizer=optimizer
+    )
 
     mll = make_mll(model, num_data=X.size(0), beta=beta)
 
@@ -98,7 +109,8 @@ def fit(
     log_every = max(1, epochs // 10)
     for epoch in range(epochs):
         with gpytorch.settings.num_likelihood_samples(num_samples):
-            optimizer.zero_grad()
+            for opt in optimizers:
+                opt.zero_grad()
             output = model(X)
             if output.event_shape != Y.shape:
                 raise ValueError(
@@ -108,7 +120,8 @@ def fit(
                 )
             loss = -mll(output, Y)
             loss.backward()
-            optimizer.step()
+            for opt in optimizers:
+                opt.step()
         loss_value = float(loss.detach().item())
         losses.append(loss_value)
         if verbose and (epoch % log_every == 0 or epoch == epochs - 1):

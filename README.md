@@ -31,8 +31,8 @@ bands show ±2 standard deviations of `y`. The script
 [`docs/images/make_snelson1d.py`](https://github.com/bydeng01/deepgp-torch/blob/main/docs/images/make_snelson1d.py)
 generates the figure.
 
-> **Status:** early development. Minibatch training, natural-gradient training
-> and the benchmark harness are not implemented yet (see
+> **Status:** early development. Minibatch training and the benchmark harness
+> are not implemented yet (see
 > [planned work](https://github.com/bydeng01/deepgp-torch/blob/main/CONTRIBUTING.md#planned-work)).
 
 ## Install

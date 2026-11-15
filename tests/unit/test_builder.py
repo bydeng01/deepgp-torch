@@ -21,10 +21,13 @@ identity/PCA hidden means, hidden ``q_sqrt`` shrunk by
 and a Gaussian likelihood initialised to ``likelihood_noise``.
 """
 
+import math
+
+import pytest
 import torch
 
 import deepgp  # noqa: F401  (import sets float64 default dtype)
-from deepgp import DeepGPConfig, build_deep_gp
+from deepgp import DeepGPConfig, build_deep_gp, fit
 from deepgp.data import init_inducing
 from deepgp.kernels import make_kernel
 from deepgp.means import make_mean
@@ -126,3 +129,91 @@ def test_build_deep_gp_applies_configured_initialisation() -> None:
 
     # Likelihood noise initialised via the constrained property.
     assert abs(float(model.likelihood.noise.detach()) - 0.03) < 1e-6
+
+
+# --------------------------------------------------------------------------
+# hidden_dims
+# --------------------------------------------------------------------------
+def _z(layer) -> torch.Tensor:
+    return layer.variational_strategy.inducing_points.detach()
+
+
+@pytest.mark.parametrize(
+    "hidden_dims, mean_type",
+    [
+        ([5, 2], "identity"),  # wider (identity + zero rows), then narrower (PCA)
+        ([2], "identity"),  # narrower: PCA
+        (None, "linear"),  # dim-preserving PCA rotation
+    ],
+)
+def test_build_deep_gp_honours_hidden_dims(hidden_dims, mean_type) -> None:
+    torch.manual_seed(0)
+    x = torch.randn(60, 3)
+    num_layers = 1 + (len(hidden_dims) if hidden_dims else 1)
+    cfg = _cfg(num_inducing=10, hidden_dims=hidden_dims, mean_type=mean_type)
+    model = build_deep_gp(x, num_layers=num_layers, config=cfg, seed=0)
+
+    widths = hidden_dims or [3]
+    layers = list(model.hidden_layers)
+    assert [layer.output_dims for layer in layers] == widths
+    assert [layer.input_dims for layer in layers] == [3] + widths[:-1]
+    assert model.last_layer.input_dims == widths[-1]
+
+    # Layer 1 starts at the KMeans centres of X; every later layer starts at
+    # the previous layer's inducing points mapped through its mean, i.e. where
+    # that layer's outputs are at initialisation.
+    z = init_inducing(x, 10, method="kmeans", seed=0)
+    for layer, width in zip(layers, widths):
+        assert torch.allclose(_z(layer), z.expand(width, -1, -1))
+        with torch.no_grad():
+            z = layer.mean_module(z).T
+    assert torch.allclose(_z(model.last_layer), z)
+
+    # The model runs and trains end to end.
+    losses = fit(model, x, x[:, 0], epochs=3, lr=0.01)
+    assert all(math.isfinite(v) for v in losses)
+
+
+def test_hidden_dims_identity_keeps_default_build_unchanged() -> None:
+    torch.manual_seed(0)
+    x = torch.randn(40, 2)
+    default = build_deep_gp(x, num_layers=3, config=_cfg(num_inducing=8), seed=0)
+    explicit = build_deep_gp(
+        x, num_layers=3, config=_cfg(num_inducing=8, hidden_dims=[2, 2]), seed=0
+    )
+    for a, b in zip(default.state_dict().values(), explicit.state_dict().values()):
+        assert torch.equal(a, b)
+
+
+def test_hidden_dims_must_match_num_layers() -> None:
+    with pytest.raises(ValueError, match="num_layers"):
+        build_deep_gp(torch.randn(20, 2), num_layers=2, config=_cfg(hidden_dims=[3, 3]))
+
+
+@pytest.mark.parametrize("bad", [[0], [2.5], [-1, 3]])
+def test_hidden_dims_must_be_positive_integers(bad) -> None:
+    with pytest.raises(ValueError, match="positive integers"):
+        _cfg(hidden_dims=bad)
+
+
+def test_width_change_needs_a_linear_hidden_mean() -> None:
+    cfg = _cfg(hidden_dims=[4], mean_type="constant")
+    with pytest.raises(ValueError, match="linear mean"):
+        build_deep_gp(torch.randn(20, 2), num_layers=2, config=cfg)
+
+
+def test_config_kernel_is_rejected_until_implemented() -> None:
+    with pytest.raises(NotImplementedError):
+        _cfg(kernel="matern")
+
+
+def test_dim_preserving_constant_mean_keeps_the_centroids_of_X() -> None:
+    """A constant hidden mean of the input width leaves the inducing points at X's."""
+    torch.manual_seed(0)
+    x = torch.randn(40, 2)
+    cfg = _cfg(num_inducing=8, mean_type="constant")
+    model = build_deep_gp(x, num_layers=3, config=cfg, seed=0)
+    z = init_inducing(x, 8, method="kmeans", seed=0)
+    for layer in model.hidden_layers:
+        assert torch.equal(_z(layer), z.expand(2, -1, -1))
+    assert torch.equal(_z(model.last_layer), z)

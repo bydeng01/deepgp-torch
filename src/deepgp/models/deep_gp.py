@@ -70,6 +70,10 @@ class DeepGP(_DeepGP):
         Mean function for hidden layers (default ``'linear'``).
     output_mean_type:
         Mean function for the output layer (default ``'constant'``).
+    hidden_variational, output_variational:
+        Parameterisation of ``q(u)`` in the hidden layers and in the output
+        layer: ``'cholesky'`` (default, trained by Adam) or ``'natural'``
+        (trained by natural gradients through ``fit(..., natgrad_lr=...)``).
     """
 
     def __init__(
@@ -79,6 +83,8 @@ class DeepGP(_DeepGP):
         num_outputs: Optional[int] = None,
         hidden_mean_type: str = "linear",
         output_mean_type: str = "constant",
+        hidden_variational: str = "cholesky",
+        output_variational: str = "cholesky",
     ) -> None:
         if len(dims) < 1:
             raise ValueError("`dims` must contain at least the input dimension.")
@@ -93,6 +99,7 @@ class DeepGP(_DeepGP):
                     output_dims=width,
                     num_inducing=num_inducing,
                     mean_type=hidden_mean_type,
+                    variational=hidden_variational,
                 )
             )
             prev = width
@@ -103,6 +110,7 @@ class DeepGP(_DeepGP):
             output_dims=num_outputs,
             num_inducing=num_inducing,
             mean_type=output_mean_type,
+            variational=output_variational,
         )
 
         self.num_outputs = num_outputs

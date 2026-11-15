@@ -19,7 +19,9 @@ building block the deep GP generalises.  It is a stochastic variational GP
 (Hensman et al., 2013/2015) implemented as a
 :class:`gpytorch.models.ApproximateGP` with a
 :class:`~gpytorch.variational.VariationalStrategy` over a
-:class:`~gpytorch.variational.CholeskyVariationalDistribution`.
+:class:`~gpytorch.variational.CholeskyVariationalDistribution` (or, with
+``variational='natural'``, its natural parameterisation for natural-gradient
+training).
 
 A Gaussian likelihood is attached as ``self.likelihood`` so that the same
 :func:`deepgp.fit` / :func:`deepgp.predict` helpers work for both ``SVGP`` and
@@ -43,13 +45,13 @@ from gpytorch.kernels import RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean
 from gpytorch.models import ApproximateGP
 from gpytorch.variational import (
-    CholeskyVariationalDistribution,
     IndependentMultitaskVariationalStrategy,
     VariationalStrategy,
 )
 
 from deepgp.likelihoods.factory import make_likelihood
 from deepgp.utils.dtype import as_default_dtype
+from deepgp.variational import make_variational_distribution
 
 __all__ = ["SVGP"]
 
@@ -74,6 +76,10 @@ class SVGP(ApproximateGP):
         output with a :class:`~gpytorch.likelihoods.GaussianLikelihood`; an
         integer gives ``T`` independent GPs with one noise variance each (see
         :func:`deepgp.likelihoods.make_likelihood`).
+    variational:
+        Parameterisation of ``q(u)``: ``'cholesky'`` (default, trained by Adam)
+        or ``'natural'`` (trained by natural gradients through
+        ``fit(..., natgrad_lr=...)``); see :mod:`deepgp.variational`.
     """
 
     def __init__(
@@ -82,6 +88,7 @@ class SVGP(ApproximateGP):
         input_dims: Optional[int] = None,
         learn_inducing_locations: bool = True,
         num_outputs: Optional[int] = None,
+        variational: str = "cholesky",
     ) -> None:
         if inducing_points.dim() != 2:
             raise ValueError(
@@ -102,8 +109,8 @@ class SVGP(ApproximateGP):
         if num_outputs is not None:
             inducing_points = inducing_points.unsqueeze(0).repeat(num_outputs, 1, 1)
 
-        variational_distribution = CholeskyVariationalDistribution(
-            num_inducing, batch_shape=batch_shape
+        variational_distribution = make_variational_distribution(
+            variational, num_inducing, batch_shape=batch_shape
         )
         base_strategy = VariationalStrategy(
             self,

@@ -28,7 +28,8 @@ the layer and automatically contributes this layer's KL term to the model ELBO.
 
 Defaults:
 
-* ``CholeskyVariationalDistribution`` for a full-covariance ``q(u)``.
+* a full-covariance ``q(u)``: ``CholeskyVariationalDistribution``, or its
+  natural parameterisation with ``variational='natural'``.
 * ``VariationalStrategy(..., learn_inducing_locations=True)`` (whitened by
   default) so inducing locations are optimised.
 * ``ScaleKernel(RBFKernel(ard_num_dims=input_dims))`` — signal variance lives on
@@ -52,13 +53,13 @@ from gpytorch.distributions import MultivariateNormal
 from gpytorch.kernels import Kernel, RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean, LinearMean, Mean, ZeroMean
 from gpytorch.models.deep_gps import DeepGPLayer
-from gpytorch.variational import (
-    CholeskyVariationalDistribution,
-    UnwhitenedVariationalStrategy,
-    VariationalStrategy,
-)
+from gpytorch.variational import UnwhitenedVariationalStrategy, VariationalStrategy
 
 from deepgp.utils.dtype import as_default_dtype
+from deepgp.variational import (
+    make_variational_distribution,
+    scale_variational_covariance,
+)
 
 __all__ = ["DeepGPHiddenLayer"]
 
@@ -122,6 +123,10 @@ class DeepGPHiddenLayer(DeepGPLayer):
         for a stable, near-deterministic start).  When set, the variational
         distribution is marked initialised so the shrink is not overwritten by
         the strategy's lazy first-forward reset to the prior.
+    variational:
+        Parameterisation of ``q(u)``: ``'cholesky'`` (default, trained by Adam)
+        or ``'natural'`` (trained by natural gradients through
+        ``fit(..., natgrad_lr=...)``); see :mod:`deepgp.variational`.
     """
 
     def __init__(
@@ -136,6 +141,7 @@ class DeepGPHiddenLayer(DeepGPLayer):
         covar_module: Optional[Kernel] = None,
         whiten: bool = True,
         q_sqrt_factor: Optional[float] = None,
+        variational: str = "cholesky",
     ) -> None:
         batch_shape = (
             torch.Size([]) if output_dims is None else torch.Size([output_dims])
@@ -151,8 +157,8 @@ class DeepGPHiddenLayer(DeepGPLayer):
             # layer in mixed precision.
             inducing_points = as_default_dtype(inducing_points)
 
-        variational_distribution = CholeskyVariationalDistribution(
-            num_inducing, batch_shape=batch_shape
+        variational_distribution = make_variational_distribution(
+            variational, num_inducing, batch_shape=batch_shape
         )
         strategy_cls = VariationalStrategy if whiten else UnwhitenedVariationalStrategy
         variational_strategy = strategy_cls(
@@ -181,14 +187,14 @@ class DeepGPHiddenLayer(DeepGPLayer):
             self._shrink_q_sqrt(float(q_sqrt_factor))
 
     def _shrink_q_sqrt(self, factor: float) -> None:
-        """Scale the Cholesky factor of ``q(u)`` and mark it initialised.
+        """Scale the covariance of ``q(u)`` by ``factor**2`` and mark it initialised.
 
-        The strategy lazily resets ``q(u)`` to the prior on the first forward
-        pass; marking it initialised keeps the shrink in place.
+        For the Cholesky parameterisation this multiplies the Cholesky factor by
+        ``factor``. The strategy lazily resets ``q(u)`` to the prior on the first
+        forward pass; marking it initialised keeps the shrink in place.
         """
-        with torch.no_grad():
-            var_dist = self.variational_strategy._variational_distribution
-            var_dist.chol_variational_covar.mul_(factor)
+        var_dist = self.variational_strategy._variational_distribution
+        scale_variational_covariance(var_dist, factor)
         self.variational_strategy.variational_params_initialized.fill_(1)
 
     def forward(self, x: torch.Tensor) -> MultivariateNormal:

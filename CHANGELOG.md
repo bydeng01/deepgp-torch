@@ -16,6 +16,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `deepgp.training.is_exact_gp`.
 - **Tests:** `predict` on an `ExactGP` matches the closed-form GP posterior.
   Observation noise adds exactly the noise variance to the predictive variance.
+- **Natural-gradient training:** `SVGP`, `DeepGPHiddenLayer` and `DeepGP` take
+  `variational="natural"` (`hidden_variational` / `output_variational` for
+  `DeepGP` and `DeepGPConfig`), a natural-parameter `q(u)`.
+  `fit(..., natgrad_lr=...)` steps it with GPyTorch's `NGD` and every other
+  parameter with Adam. `fit` raises `ValueError` for a natural `q(u)` without
+  `natgrad_lr`, and for `natgrad_lr` on a model without one.
+- `deepgp.variational.make_variational_distribution` and
+  `scale_variational_covariance`; `deepgp.training.make_optimizers` and
+  `natural_variational_parameters`.
+
+### Fixed
+
+- `build_deep_gp` ignored `DeepGPConfig.hidden_dims` and always built hidden
+  layers of the input width. It now builds the given widths, and raises
+  `ValueError` when `len(hidden_dims) != num_layers - 1`, when a width is not a
+  positive integer, or when a layer changes width with a constant or zero mean.
+- Each hidden layer after the first, and the output layer, started from the
+  k-means centroids of `X` even when an earlier hidden mean was not the
+  identity (`mean_type="linear"`). They now start from those centroids mapped
+  through the earlier hidden means. Identity means are unchanged.
+- `make_mean` raised for a layer wider than its input with `kind="identity"`,
+  and gave every output the same weights for a 1-D input. The first outputs
+  now keep the identity and the others start at zero. With `kind="pca"` the
+  directions beyond those of the data start at zero.
+- `DeepGPConfig(kernel=...)` was accepted and ignored. It now raises
+  `NotImplementedError`.
 
 ## [0.2.0] - 2026-09-28
 

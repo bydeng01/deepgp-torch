@@ -16,7 +16,7 @@
 
 The configuration consumed by :func:`deepgp.builders.build_deep_gp`.
 ``num_inducing`` / ``inner_layer_qsqrt_factor`` / ``likelihood_noise`` are
-required; only ``whiten`` carries a default. An ``inner_layer_qsqrt_factor`` of
+required; every other field has a default. An ``inner_layer_qsqrt_factor`` of
 ~1e-5 gives a stable, near-deterministic hidden-layer start.
 """
 
@@ -43,18 +43,26 @@ class DeepGPConfig:
     likelihood_noise:
         Initial observation-noise variance, used for every output (required).
     hidden_dims:
-        Optional explicit hidden-layer widths; ``None`` (default) means
-        dim-preserving hidden layers (width = input dim).
+        Optional explicit hidden-layer widths, one per hidden layer, so
+        ``len(hidden_dims)`` must equal ``num_layers - 1``; ``None`` (default)
+        means dim-preserving hidden layers (width = input dim).
     whiten:
         Whether to use the whitened variational parameterisation (default
         ``True``).
     mean_type:
         Hidden-layer mean function (default ``'identity'`` — an identity map
-        for dim-preserving layers, a PCA-linear map otherwise).
+        for dim-preserving layers, a PCA-linear map otherwise). A hidden layer
+        whose width differs from its input needs ``'identity'`` or ``'linear'``.
     inducing_init:
         Inducing initialisation strategy: ``'kmeans'`` (default) or ``'subset'``.
+    hidden_variational, output_variational:
+        Parameterisation of ``q(u)`` in the hidden layers and in the output
+        layer: ``'cholesky'`` (default, trained by Adam) or ``'natural'``
+        (trained by natural gradients; pass ``natgrad_lr`` to
+        :func:`deepgp.fit`).
     kernel:
-        Optional kernel spec/override (reserved; default builds an ARD RBF).
+        Reserved for a kernel spec/override; not implemented, so it must stay
+        ``None`` (the builder uses an ARD RBF kernel).
     """
 
     num_inducing: int
@@ -64,4 +72,19 @@ class DeepGPConfig:
     whiten: bool = True
     mean_type: str = "identity"
     inducing_init: str = "kmeans"
+    hidden_variational: str = "cholesky"
+    output_variational: str = "cholesky"
     kernel: Optional[object] = field(default=None)
+
+    def __post_init__(self) -> None:
+        if self.kernel is not None:
+            raise NotImplementedError(
+                "DeepGPConfig.kernel is reserved and not implemented; leave it None."
+            )
+        if self.hidden_dims is not None:
+            widths = list(self.hidden_dims)
+            if any(int(w) != w or w < 1 for w in widths):
+                raise ValueError(
+                    f"hidden_dims must be positive integers; got {widths}."
+                )
+            self.hidden_dims = [int(w) for w in widths]

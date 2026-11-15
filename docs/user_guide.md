@@ -25,6 +25,24 @@ models, `fit` and `predict` cast input tensors to the default dtype. Call
 steps and returns the loss at each step. Pass `optimizer` to use a different
 optimiser. The model is trained in place.
 
+### Natural gradients
+
+`SVGP`, `DeepGPHiddenLayer` and `DeepGP` take `variational="natural"` (for a
+`DeepGP` or `DeepGPConfig`: `hidden_variational` and `output_variational`).
+Such a $q(u)$ is parameterised by its natural parameters and trained by natural
+gradient descent (Salimbeni, Eleftheriadis & Hensman, 2018). `fit(...,
+natgrad_lr=0.1)` steps those parameters with GPyTorch's `NGD` and every other
+parameter with Adam. `fit` raises `ValueError` for a natural $q(u)$ without
+`natgrad_lr`, because other optimisers do not follow the natural gradient.
+
+On Snelson with an SVGP, after 20 steps the negative ELBO per point was about
+0.98 with NGD (step sizes from 0.1 to 1) and 1.50 with Adam alone. After 300
+steps both were at about 0.48. In deep GPs the effect depends on the data. On
+Snelson, after 500 steps, NGD in every layer with step sizes of 0.05 or more
+gave the lowest loss. On a 4-D synthetic problem, NGD on the output layer or on
+every layer ended with a higher loss and test error than Adam alone, after 500
+and 1500 steps, for step sizes from 0.01 to 0.5.
+
 ### Objectives
 
 For `SVGP` and `DeepGP`, `fit` maximises the evidence lower bound (ELBO)
@@ -106,11 +124,16 @@ a linear map of its input. `DeepGP` uses `hidden_mean_type="linear"` and
 hidden layers and one output layer. It initialises the model from the training
 inputs `X`:
 
-- inducing points at the k-means centroids of `X`,
+- inducing points of the first layer at the k-means centroids of `X`,
 - identity mean functions in the hidden layers,
 - the Cholesky factor of each hidden layer's $q(u)$ covariance multiplied by
   `inner_layer_qsqrt_factor`,
 - the observation noise variance set to `likelihood_noise`.
+
+At this initialisation a hidden layer's output is close to its mean function.
+Each later layer's inducing points are therefore the previous layer's inducing
+points mapped through the previous layer's mean. Identity means leave them
+unchanged, so by default every layer starts at the centroids of `X`.
 
 A small `inner_layer_qsqrt_factor`, such as `1e-5`, reduces the sampling noise
 of the hidden layers at the start of training.
@@ -122,13 +145,19 @@ of the hidden layers at the start of training.
 | `num_inducing` | inducing points per layer, at most $N$ | required |
 | `inner_layer_qsqrt_factor` | factor for the Cholesky factor of hidden-layer $q(u)$ covariances | required |
 | `likelihood_noise` | initial noise variance of every output | required |
-| `hidden_dims` | hidden-layer widths, `None` for the input width | `None` |
+| `hidden_dims` | one width per hidden layer, so `num_layers - 1` of them; `None` for the input width | `None` |
 | `whiten` | whitened parameterisation of $q(u)$ | `True` |
 | `mean_type` | hidden-layer mean, `"identity"`, `"linear"`, `"constant"` or `"zero"` | `"identity"` |
 | `inducing_init` | `"kmeans"` or `"subset"` of the training inputs | `"kmeans"` |
+| `hidden_variational`, `output_variational` | $q(u)$ parameterisation of the hidden and output layers, `"cholesky"` or `"natural"` (see [Natural gradients](#natural-gradients)) | `"cholesky"` |
 
-With `mean_type="identity"`, a hidden layer whose width differs from its input
-dimension uses a linear mean initialised from the principal directions of `X`.
+With `mean_type="identity"`, a hidden layer narrower than its input uses a
+linear mean initialised from the principal directions of its input. A layer
+wider than its input keeps the identity on its first outputs and starts the
+others at zero, as in the reference implementation of Salimbeni & Deisenroth
+(2017). A hidden layer that changes width needs `mean_type="identity"` or
+`"linear"`. With `"constant"` or `"zero"` its outputs start as constants, and
+the builder raises `ValueError`.
 
 ## Multiple outputs
 
@@ -164,3 +193,5 @@ $\sigma_t^2$.
   Networks*, AISTATS 2014.
 - Salimbeni & Deisenroth, *Doubly Stochastic Variational Inference for Deep
   Gaussian Processes*, NeurIPS 2017.
+- Salimbeni, Eleftheriadis & Hensman, *Natural Gradients in Practice:
+  Non-Conjugate Variational Inference in Gaussian Process Models*, AISTATS 2018.

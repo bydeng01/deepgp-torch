@@ -63,7 +63,6 @@ Open an issue before starting work on one of them.
 |---|---|
 | Minibatch training with `DataLoader`, learning-rate schedulers and logging | `deepgp.training.trainer` |
 | Saving and loading model state, build config and RNG state | `deepgp.training.checkpoint` |
-| Natural-gradient training, with NGD on `q(u)` and Adam on hyperparameters | `deepgp.training.natgrad` |
 | Re-exports of GPyTorch variational objects | `deepgp.variational` |
 | UCI benchmark harness and equivalence test against GPflux | `benchmarks/` |
 | Sphinx documentation | `docs/` |

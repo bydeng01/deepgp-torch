@@ -99,3 +99,31 @@ def test_make_kernel_ard_toggle() -> None:
     # ARD on -> one lengthscale per input dimension.
     assert ard_kernel.base_kernel.ard_num_dims == 3
     assert ard_kernel.base_kernel.lengthscale.shape[-1] == 3
+
+
+def test_make_mean_identity_wider_layer_pads_with_zero_rows() -> None:
+    """A layer wider than its input: identity on the first outputs, then zeros."""
+    mean = make_mean(2, 5, kind="identity")  # no X needed
+    weights = mean.weights.squeeze(-1)  # (output_dims=5, input_dims=2)
+    assert torch.equal(weights, torch.eye(5, 2))
+    x = torch.randn(7, 2)
+    out = mean(x)  # (5, 7)
+    assert torch.allclose(out[:2], x.T)
+    assert torch.count_nonzero(out[2:]) == 0
+
+
+def test_make_mean_pca_wider_layer_pads_with_zero_rows() -> None:
+    torch.manual_seed(0)
+    x = torch.randn(30, 2)
+    weights = make_mean(2, 5, kind="pca", X=x).weights.squeeze(-1)
+    assert weights.shape == (5, 2)
+    # The two available principal directions are orthonormal ...
+    assert torch.allclose(weights[:2] @ weights[:2].T, torch.eye(2), atol=1e-10)
+    # ... and the rest of the layer starts at zero.
+    assert torch.count_nonzero(weights[2:]) == 0
+
+
+def test_make_mean_one_dimensional_input_wider_layer_is_not_degenerate() -> None:
+    # Before the zero padding, every output of a 1 -> 3 layer copied x.
+    weights = make_mean(1, 3, kind="identity").weights.squeeze(-1)
+    assert torch.equal(weights, torch.tensor([[1.0], [0.0], [0.0]]))

@@ -14,12 +14,14 @@
 
 """One-call deep GP builder.
 
-``build_deep_gp(X, num_layers, config)`` assembles a constant-input-dimension
-deep GP and applies the builder's stable-start initialisation:
+``build_deep_gp(X, num_layers, config)`` assembles a deep GP and applies the
+builder's stable-start initialisation:
 
-* **dim-preserving** hidden layers of width ``X.shape[-1]``;
-* **KMeans** inducing initialisation from ``X`` (shared across layers, since the
-  identity-mean hidden layers keep the representation ~ ``X``);
+* hidden layers of the widths in ``config.hidden_dims``, by default
+  **dim-preserving** (width ``X.shape[-1]``);
+* **KMeans** inducing initialisation from ``X`` for the first layer; each later
+  layer starts from those centres mapped through the hidden means before it
+  (unchanged by identity means);
 * hidden-layer **identity** (or PCA) linear mean functions;
 * hidden-layer ``q_sqrt`` **shrunk** by ``config.inner_layer_qsqrt_factor`` (~1e-5);
 * a ``ConstantMean`` output layer with one GP per output (``num_outputs``);
@@ -29,9 +31,10 @@ deep GP and applies the builder's stable-start initialisation:
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 import torch
+from gpytorch.means import LinearMean
 
 from deepgp.builders.config import DeepGPConfig
 from deepgp.data.inducing import init_inducing
@@ -105,8 +108,9 @@ def build_deep_gp(
         Training inputs, shape ``(N, input_dims)`` — used for inducing init and
         the PCA/identity hidden means.
     num_layers:
-        Total number of GP layers (``num_layers - 1`` dim-preserving hidden
-        layers + 1 output layer). Must be >= 1.
+        Total number of GP layers (``num_layers - 1`` hidden layers + 1 output
+        layer). Must be >= 1. The hidden layers have the widths in
+        ``config.hidden_dims``, or the input width when it is ``None``.
     config:
         A :class:`DeepGPConfig` (required).
     seed:
@@ -130,29 +134,44 @@ def build_deep_gp(
     if X.dim() != 2:
         raise ValueError(f"X must be 2-D (N, input_dims); got {tuple(X.shape)}.")
     input_dims = X.shape[-1]
+    widths = _hidden_widths(config, num_layers, input_dims)
 
-    # Shared KMeans inducing init (identity-mean hidden layers keep the
-    # representation ~ X, so the same centres initialise every layer).
+    # KMeans inducing init in the input space of the first layer.
     z = init_inducing(X, config.num_inducing, method=config.inducing_init, seed=seed)
     num_inducing = z.shape[0]
 
+    # ``h`` (the training inputs) and ``z`` (the inducing inputs) are carried in
+    # the input space of the layer being built. At initialisation a hidden
+    # layer's output is ~ its mean function (q(u) has zero mean and a shrunk
+    # covariance), so both are mapped through each linear hidden mean. An
+    # identity mean leaves them unchanged.
+    h = X
     hidden_layers = []
     prev = input_dims
-    for _ in range(num_layers - 1):
-        z_hidden = z.unsqueeze(0).repeat(input_dims, 1, 1)  # (D, M, D)
+    for width in widths:
+        mean_function = make_mean(prev, width, kind=config.mean_type, X=h)
         hidden_layers.append(
             DeepGPHiddenLayer(
                 input_dims=prev,
-                output_dims=input_dims,
+                output_dims=width,
                 num_inducing=num_inducing,
-                inducing_points=z_hidden,
-                mean_function=make_mean(prev, input_dims, kind=config.mean_type, X=X),
-                covar_module=make_kernel(prev, input_dims),
+                inducing_points=z.unsqueeze(0).repeat(width, 1, 1),  # (W, M, D)
+                mean_function=mean_function,
+                covar_module=make_kernel(prev, width),
                 whiten=config.whiten,
                 q_sqrt_factor=config.inner_layer_qsqrt_factor,
+                variational=config.hidden_variational,
             )
         )
-        prev = input_dims
+        if isinstance(mean_function, LinearMean):
+            h, z = _through_mean(mean_function, h), _through_mean(mean_function, z)
+        elif width != prev:
+            raise ValueError(
+                f"A hidden layer that changes width ({prev} -> {width}) needs a "
+                f"linear mean to place the next layer's inducing points; got "
+                f"mean_type={config.mean_type!r}. Use 'identity' or 'linear'."
+            )
+        prev = width
 
     last_layer = DeepGPHiddenLayer(
         input_dims=prev,
@@ -166,7 +185,31 @@ def build_deep_gp(
         mean_function=make_mean(prev, num_outputs, kind="constant"),
         covar_module=make_kernel(prev, num_outputs),
         whiten=config.whiten,
+        variational=config.output_variational,
     )
 
     likelihood = make_likelihood(num_outputs, noise=config.likelihood_noise)
     return DeepGP.from_layers(hidden_layers, last_layer, likelihood=likelihood)
+
+
+def _hidden_widths(config: DeepGPConfig, num_layers: int, input_dims: int) -> List[int]:
+    """The width of each of the ``num_layers - 1`` hidden layers."""
+    if config.hidden_dims is None:
+        return [input_dims] * (num_layers - 1)
+    widths = list(config.hidden_dims)
+    if len(widths) != num_layers - 1:
+        raise ValueError(
+            f"hidden_dims={widths} gives {len(widths)} hidden layers, but "
+            f"num_layers={num_layers} has {num_layers - 1}."
+        )
+    return widths
+
+
+def _through_mean(mean_function: LinearMean, x: torch.Tensor) -> torch.Tensor:
+    """Map rows ``x`` of shape ``(N, D)`` through a batched linear mean.
+
+    The mean has ``batch_shape=[W]`` and returns ``(W, N)``; the result is the
+    ``(N, W)`` matrix of the layer's initial outputs.
+    """
+    with torch.no_grad():
+        return mean_function(x).transpose(-1, -2).contiguous()

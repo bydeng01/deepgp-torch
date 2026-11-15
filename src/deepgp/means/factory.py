@@ -15,8 +15,11 @@
 """Mean-function factory.
 
 For a dim-preserving layer (``input_dims == output_dims``) the hidden mean is
-the **identity** map; when the dimensions differ it is a **PCA-initialised
-linear** map (top principal directions of the training inputs).
+the **identity** map. A layer wider than its input keeps the identity on its
+first ``input_dims`` outputs and starts the others at zero; a narrower layer
+gets a **PCA-initialised linear** map (top principal directions of the training
+inputs). This follows the reference implementation of Salimbeni & Deisenroth
+(2017).
 Identity/linear hidden means prevent doubly-stochastic hidden-field collapse.
 ``ConstantMean`` / ``ZeroMean`` are also available; the output layer uses
 ``ConstantMean``.
@@ -41,11 +44,16 @@ def _pca_directions(X: torch.Tensor, output_dims: int) -> torch.Tensor:
 
     Returns a tensor of shape ``(output_dims, input_dims)`` where row ``d`` is the
     ``d``-th principal direction, so ``x @ row_d`` is the ``d``-th PCA score.
+    ``X`` has at most ``min(N, input_dims)`` directions; when ``output_dims`` asks
+    for more, the remaining rows are zero, so those outputs start at zero.
     """
     x_centered = X - X.mean(dim=0, keepdim=True)
     # rows of Vh are the principal directions (V^T from the SVD of X_centered).
     _, _, vh = torch.linalg.svd(x_centered, full_matrices=False)
-    return vh[:output_dims].contiguous()
+    directions = vh.new_zeros(output_dims, X.shape[-1])
+    k = min(output_dims, vh.shape[0])
+    directions[:k] = vh[:k]
+    return directions
 
 
 def make_mean(
@@ -63,9 +71,10 @@ def make_mean(
     output_dims:
         Number of latent GP outputs; ``None`` for a single-output layer.
     kind:
-        ``'identity'`` (identity when ``input_dims == output_dims`` else PCA),
-        ``'linear'``/``'pca'`` (PCA-initialised linear), ``'constant'`` or
-        ``'zero'``.
+        ``'identity'`` (identity when ``input_dims == output_dims``, identity
+        plus zero rows when ``output_dims > input_dims``, PCA otherwise),
+        ``'linear'``/``'pca'`` (PCA-initialised linear, zero rows beyond the
+        available directions), ``'constant'`` or ``'zero'``.
     X:
         Training inputs, required for the PCA initialisation.
 
@@ -99,13 +108,14 @@ def make_mean(
         return mean
 
     with torch.no_grad():
-        if kind == "identity" and input_dims == output_dims:
-            weights = torch.eye(input_dims)  # (output_dims, input_dims)
+        if kind == "identity" and input_dims <= output_dims:
+            # (output_dims, input_dims): the identity, then zero rows if wider.
+            weights = torch.eye(output_dims, input_dims)
         else:
             if X is None:
                 raise ValueError(
-                    "PCA/linear mean init with input_dims != output_dims "
-                    "requires X (training inputs)."
+                    "PCA/linear mean init requires X (training inputs) unless "
+                    "kind='identity' and input_dims <= output_dims."
                 )
             weights = _pca_directions(X, output_dims)  # (output_dims, input_dims)
         # LinearMean weights have shape (output_dims, input_dims, 1); row d is W[d].
