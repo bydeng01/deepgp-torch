@@ -29,7 +29,7 @@ from typing import List, Optional
 import gpytorch
 import torch
 
-from deepgp.training.elbo import make_mll
+from deepgp.training.elbo import is_exact_gp, make_mll
 from deepgp.utils.dtype import as_default_dtype
 
 __all__ = ["fit"]
@@ -53,7 +53,8 @@ def fit(
     Parameters
     ----------
     model:
-        An ``SVGP`` or ``DeepGP`` (must expose ``model.likelihood``).
+        An ``ExactGP``, ``SVGP`` or ``DeepGP`` (must expose ``model.likelihood``).
+        An ``ExactGP``'s train data is replaced by ``(X, Y)``.
     X:
         Training inputs, shape ``(N, input_dims)``.
     Y:
@@ -83,6 +84,9 @@ def fit(
     """
     X = as_default_dtype(X)
     Y = as_default_dtype(Y)
+    if is_exact_gp(model):
+        # ExactGP must be called on its own train inputs.
+        model.set_train_data(X, Y, strict=False)
 
     model.train()
     if optimizer is None:

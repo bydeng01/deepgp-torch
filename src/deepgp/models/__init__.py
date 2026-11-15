@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""GP models: single-layer SVGP and the deep GP container."""
+"""GP models: exact GP, single-layer SVGP and the deep GP container."""
 
 from deepgp.models.deep_gp import DeepGP
+from deepgp.models.exact_gp import ExactGP
 from deepgp.models.svgp import SVGP
 
-__all__ = ["DeepGP", "SVGP"]
+__all__ = ["DeepGP", "ExactGP", "SVGP"]

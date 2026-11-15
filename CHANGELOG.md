@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Exact GP regression:** `ExactGP` uses the same mean, kernel and likelihood
+  as `SVGP`. It takes `num_outputs=T` for `T` independent outputs.
+- `make_mll` returns an `ExactMarginalLogLikelihood` for an `ExactGP`. `fit`
+  then maximises the exact log marginal likelihood.
+- `fit` sets the training data of an `ExactGP` to the `X` and `Y` it receives.
+- `deepgp.training.is_exact_gp`.
+- **Tests:** `predict` on an `ExactGP` matches the closed-form GP posterior.
+  Observation noise adds exactly the noise variance to the predictive variance.
+
 ## [0.2.0] - 2026-09-28
 
 ### Added

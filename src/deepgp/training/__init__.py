@@ -14,7 +14,7 @@
 
 """Training: ELBO construction and optimisation loops."""
 
-from deepgp.training.elbo import is_deep_gp, make_mll
+from deepgp.training.elbo import is_deep_gp, is_exact_gp, make_mll
 from deepgp.training.trainer import fit
 
-__all__ = ["make_mll", "is_deep_gp", "fit"]
+__all__ = ["make_mll", "is_deep_gp", "is_exact_gp", "fit"]

@@ -37,14 +37,24 @@ GPyTorch divides the likelihood term by the number of rows too, so passing
 from __future__ import annotations
 
 import gpytorch
-from gpytorch.mlls import DeepApproximateMLL, MarginalLogLikelihood, VariationalELBO
+from gpytorch.mlls import (
+    DeepApproximateMLL,
+    ExactMarginalLogLikelihood,
+    MarginalLogLikelihood,
+    VariationalELBO,
+)
 
-__all__ = ["make_mll", "is_deep_gp"]
+__all__ = ["make_mll", "is_deep_gp", "is_exact_gp"]
 
 
 def is_deep_gp(model) -> bool:
     """Return ``True`` if ``model`` is a (multi-layer) deep GP."""
     return isinstance(model, gpytorch.models.deep_gps.DeepGP)
+
+
+def is_exact_gp(model) -> bool:
+    """Return ``True`` if ``model`` is an exact GP."""
+    return isinstance(model, gpytorch.models.ExactGP)
 
 
 def make_mll(model, num_data: int, beta: float = 1.0) -> MarginalLogLikelihood:
@@ -66,8 +76,11 @@ def make_mll(model, num_data: int, beta: float = 1.0) -> MarginalLogLikelihood:
         A ``DeepApproximateMLL(VariationalELBO(...))`` for deep GPs, or a plain
         ``VariationalELBO(...)`` for shallow models.  In both cases the returned
         object exposes ``.num_data`` and ``.beta``, so the KL weight is
-        ``mll.beta / mll.num_data``.
+        ``mll.beta / mll.num_data``.  Exact GPs get an
+        ``ExactMarginalLogLikelihood``; ``num_data`` and ``beta`` are unused.
     """
+    if is_exact_gp(model):
+        return ExactMarginalLogLikelihood(model.likelihood, model)
     base = VariationalELBO(model.likelihood, model, num_data=num_data, beta=beta)
     if is_deep_gp(model):
         return DeepApproximateMLL(base)

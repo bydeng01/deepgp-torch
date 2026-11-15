@@ -26,8 +26,8 @@ first two moments follow the **law of total variance**::
 instead of ``0/0 -> NaN``.  Using a single component's ``.variance`` alone
 under-reports uncertainty.
 
-For a shallow model (``SVGP``) there is no sample dimension, so the model's own
-predictive mean/variance are returned directly.
+For a shallow model (``SVGP``, ``ExactGP``) there is no sample dimension, so the
+model's own predictive mean/variance are returned directly.
 
 With ``T`` outputs the reduction is applied to each output, giving ``(N, T)``
 tensors: ``var[n, t]`` is the variance of output ``t`` at ``x_n`` under the
@@ -62,7 +62,7 @@ def predict(
     Parameters
     ----------
     model:
-        A trained ``SVGP`` or ``DeepGP``.
+        A trained ``ExactGP``, ``SVGP`` or ``DeepGP``.
     X:
         Test inputs, shape ``(N, input_dims)``.
     k:

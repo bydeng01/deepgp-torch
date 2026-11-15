@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""deepgp — a GPyTorch library for doubly-stochastic deep Gaussian processes.
+"""deepgp: exact, sparse variational and deep Gaussian processes in GPyTorch.
 
 Top-level API::
 
-    from deepgp import DeepGP, SVGP, fit, predict, build_deep_gp
+    from deepgp import ExactGP, SVGP, DeepGP, fit, predict, build_deep_gp
     from deepgp.data import load_snelson1d
 
     data = load_snelson1d()
@@ -37,6 +37,7 @@ from deepgp.builders.factory import build_deep_gp
 from deepgp.inference.predict import predict
 from deepgp.layers.gp_layer import DeepGPHiddenLayer
 from deepgp.models.deep_gp import DeepGP
+from deepgp.models.exact_gp import ExactGP
 from deepgp.models.svgp import SVGP
 from deepgp.training.trainer import fit
 from deepgp.utils.dtype import set_default_float64
@@ -51,6 +52,7 @@ __all__ = [
     "__version__",
     "DeepGP",
     "DeepGPHiddenLayer",
+    "ExactGP",
     "SVGP",
     "fit",
     "predict",
